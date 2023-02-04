@@ -1,0 +1,179 @@
+<apex:page standardStylesheets="false" lightningStylesheets="true">
+  <!-- Download jQuery and jstree and upload as a static resource -->
+  <link href="{!URLFOR($Resource.jsTree,'themes/default/style.min.css')}" rel="stylesheet" />
+  <script src="{!URLFOR($Resource.jsTree,'libs/jquery.js')}"></script>
+  <script src="{!URLFOR($Resource.jsTree,'jstree.min.js')}"></script>
+  <!--Remote Objects do create,view,update and delete records without using controller and seamlessly sync with Javascript hence we used here
+  remote objects-->
+  <apex:remoteObjects>
+    <apex:remoteObjectModel name="Account" fields="Id,Name" jsShorthand="sfNode">
+      <apex:remoteObjectField name="ParentId" jsShorthand="Parent"></apex:remoteObjectField>
+    </apex:remoteObjectModel>
+  </apex:remoteObjects>
+  <script>
+    // jQuery Load to DOM
+    var $j = jQuery.noConflict();
+    $j(document).ready(function () {
+      // Instantiate Jstree 
+      $j("#jstree").jstree({
+        // add plugins here dnd = drag and drop. 
+        "plugins": ["contextmenu", "dnd", "themes"],
+        // add cores here
+        "core": {
+          themes: { "stripes": true, "dots": false, "icons": false }, //dots = true indicates connecting dots shown,icons boolean indicate node icons shown
+          // stripes boolean indicate tree background is striped
+          check_callback: true,  //if set to true user will be able to modify the structure of tree
+          animation: 0,
+          // data configuration
+          data: function (node, cb) {
+            loadNodes(this, node, cb);
+          }
+        },
+        // Shows a context menu when a node is right-clicked.
+        contextmenu: {
+          "items": function (node) {
+            return {
+              "view": {
+                label: "View Record",
+                action: function (obj) {
+                  window.open('/' + node.id);
+                }
+              },
+              "rename": {
+                label: "Rename Record",
+                action: function (obj) {
+                  $j("#jstree").jstree(true).edit(node);
+                }
+              },
+              "create": {
+                label: "Create Record",
+                action: function (obj) {
+                  createNode(node);
+                }
+              },
+              "delete": {
+                label: "Delete Record",
+                action: function (obj) {
+                  deleteNode(node);
+                }
+              },
+            }
+          }
+        }
+      });
+      // when user perform some activities, jstree listens for events
+      $j("#jstree").on("rename_node.jstree", function (event, data) {
+        renameNode(data);
+      });
+      $j("#jstree").on("select_node.jstree", function (event, data) {
+        displayPath(data.node.id);
+      });
+    });
+    // functions add here
+    function loadNodes(tree, node, cb) {
+      // for parent nodes, nodeId = "" and onclick of parent Node which has child node, This function gets called
+      var nodeId = node.id == "#" ? "" : node.id;
+      // creating instance of visualforce remote object
+      var sfNode = new SObjectModel.sfNode();
+      // retrieve takes 2 params, Query and callback function
+      sfNode.retrieve({
+        where: { Parent: { eq: nodeId } }, limit: 100
+      }, function (err, records) {
+        if (err) {
+          displayErr(err);
+        } else {
+          var nodes = [];
+          records.forEach(record => {
+            // every node contains id,text
+            nodes.push({
+              id: record.get("Id"),
+              text: record.get("Name"),
+              children: true
+            });
+          });
+          // call jstree to insert nodes to tree
+          cb.call(tree, nodes);
+        }
+      });
+    }
+    function renameNode(data) {
+      // creating remote object instance
+      var sfNode = new SObjectModel.sfNode({ Name: data.text, Id: data.node.id });
+      // update function in remote function
+      sfNode.update(function (err) {
+        if (err) {
+          displayErr(err);
+        } else {
+          displayMsg("Renamed to " + data.text);
+          displayPath(data.node.id);
+        }
+      });
+    }
+    // create Node method takes parent Node Id on right click
+    function createNode(parent) {
+      // create remote Object instance
+      var sfNode = new SObjectModel.sfNode({ Name: "New Name", Parent: parent.id });
+      // create function in order to create record in Salesforce. 
+      sfNode.create(function (err) {
+        if (err) {
+          displayErr(err);
+        } else {
+          var newNode = {
+            id: sfNode.get("Id"),
+            text: sfNode.get("Name")
+          }
+          // create jstree instance to modify its tree in DOM
+          var tree = $j("#jstree").jstree(true);
+          // create_node function takes arguments (parentNode,newNode,PositionToInsert,callbackFunction,doesParentNodeLoaded)
+          var id = tree.create_node(parent, newNode, "last", null, true);
+          // check whether parentnode closed, if Closed, Open all child nodes and create node at last
+          if (tree.is_closed(parent)) {
+            tree.open_node(parent, function () {
+              tree.deselect_all(true);
+              tree.edit(id);
+            });
+          } else {
+            tree.deselect_all(true);
+            tree.edit(id);
+          }
+        }
+      });
+    }
+    function deleteNode(node) {
+      // create remote object instance
+      var sfNode = new SObjectModel.sfNode();
+      // del function in remote objects which takes node id and callback function
+      sfNode.del(node.id, function (err) {
+        if (err) {
+          displayErr(err);
+        } else {
+          //create jstree instance to modify its tree in DOM
+          var tree = $j("#jstree").jstree(true);
+          // delete_node function of jstree takes node for deleting it from tree
+          tree.delete_node(node);
+          // refresh jstree
+          tree.refresh();
+        }
+      });
+    }
+    function displayErr(err) {
+      displayMsg("Error " + err);
+    }
+    function displayMsg(msg) {
+      $j("#msg").text(msg);
+    }
+    function displayPath(nodeId) {
+      $j("#path").text("Path : / " + getPath(nodeId));
+    }
+    function getPath(id) {
+      if (id == "#") { return ""; } else { return $j("#jstree").jstree(true).get_path({ id: id }, '/'); }
+    }
+  </script>
+  <apex:form>
+    <!-- apex:slds is for make this page looks like lightning UI -->
+    <apex:slds/>
+    <div id="msg"></div>
+    <div id="path"></div>
+    <div id="jstree"></div>
+  </apex:form>
+</apex:page>
