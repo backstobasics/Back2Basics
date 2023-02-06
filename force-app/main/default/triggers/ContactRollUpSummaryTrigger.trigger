@@ -1,7 +1,6 @@
 trigger ContactRollUpSummaryTrigger on Contact (after insert,after update,after delete,after undelete) {
-    if(Trigger.isAfter){
-           //---> on delete we use Trigger.Old, all else, Trigger.new
-        list<Contact> contacts = Trigger.isDelete ? Trigger.old :Trigger.new;
-        contactHandler.contactsOnAccount(contacts);
-    }
+   if(Trigger.isAfter){
+      list<contact> contacts = trigger.isDelete ? trigger.old :trigger.new; 
+      contactHandler.contactsOnAccount(contacts,trigger.oldMap);
+   }
 }
