@@ -1,6 +1,7 @@
+// get contact count on Account object field called contact_count__c
 trigger ContactRollUpSummaryTrigger on Contact (after insert,after update,after delete,after undelete) {
-   if(Trigger.isAfter){
-      list<contact> contacts = trigger.isDelete ? trigger.old :trigger.new; 
-      contactHandler.contactsOnAccount(contacts,trigger.oldMap);
-   }
+   // use of ternary operator, if true then trigger.old else trigger.new
+    list<contact> contacts = trigger.isDelete ? trigger.old : trigger.new;
+   //  calling apex handler class
+   contactHandler.contactonCount(contacts,trigger.oldMap);
 }
